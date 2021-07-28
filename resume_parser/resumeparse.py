@@ -10,6 +10,8 @@
 # !pip install stemming
 
 from __future__ import division
+
+import magic
 import nltk
 
 # nltk.download('punkt')
@@ -76,15 +78,16 @@ class resumeparse(object):
         'objective',
         'career objective',
         'employment objective',
-        'professional objective',
-        'summary',
+        'professional objective',        
         'career summary',
         'professional summary',
         'summary of qualifications',
+        'summary',
         # 'digital'
     )
 
     work_and_employment = (
+        'career profile',
         'employment history',
         'work history',
         'work experience',
@@ -109,6 +112,7 @@ class resumeparse(object):
         'courses',
         'related courses',
         'education',
+        'qualifications',
         'educational background',
         'educational qualifications',
         'educational training',
@@ -128,7 +132,6 @@ class resumeparse(object):
 
     skills_header = (
         'credentials',
-        'qualifications',
         'areas of experience',
         'areas of expertise',
         'areas of knowledge',
@@ -636,6 +639,7 @@ class resumeparse(object):
         """
         # file = "/content/Asst Manager Trust Administration.docx"
         file = os.path.join(file)
+
         if file.endswith('docx') or file.endswith('doc'):
             if file.endswith('doc') and docx_parser == "docx2txt":
               docx_parser = "tika"
@@ -677,6 +681,68 @@ class resumeparse(object):
             skills = resumeparse.extract_skills(full_text)
         skills = list(dict.fromkeys(skills).keys())
         
+        return {
+            "email": email,
+            "phone": phone,
+            "name": name,
+            "total_exp": total_exp,
+            "university": university,
+            "designition": designition,
+            "degree": degree,
+            "skills": skills,
+            "Companies worked at": company_working
+        }
+
+    def read_file_return(file, docx_parser="tika"):
+        """
+        file : Give path of resume file
+        docx_parser : Enter docx2txt or tika, by default is tika
+        """
+        # file = "/content/Asst Manager Trust Administration.docx"
+        file = os.path.join(file)
+        type = magic.from_file(file, mime=True)
+        print('type is' + type)
+
+        if type.endswith('docx') or type.endswith('document') or type.endswith('msword'):
+            if (type.endswith('doc') or type.endswith('msword')) and docx_parser == "docx2txt":
+                docx_parser = "tika"
+                logging.error("doc format not supported by the docx2txt changing back to tika")
+            resume_lines, raw_text = resumeparse.convert_docx_to_txt(file, docx_parser)
+        elif type.endswith('pdf'):
+            resume_lines, raw_text = resumeparse.convert_pdf_to_txt(file)
+        elif type.endswith('txt'):
+            with open(file, 'r', encoding='latin') as f:
+                resume_lines = f.readlines()
+
+        else:
+            resume_lines = None
+        resume_segments = resumeparse.segment(resume_lines)
+
+        full_text = " ".join(resume_lines)
+
+        email = resumeparse.extract_email(full_text)
+        phone = resumeparse.find_phone(full_text)
+        name = resumeparse.extract_name(" ".join(resume_segments['contact_info']))
+        total_exp, text = resumeparse.get_experience(resume_segments)
+        university = resumeparse.extract_university(full_text, os.path.join(base_path, 'world-universities.csv'))
+
+        designition = resumeparse.job_designition(full_text)
+        designition = list(dict.fromkeys(designition).keys())
+
+        degree = resumeparse.get_degree(full_text)
+        company_working = resumeparse.get_company_working(full_text)
+
+        skills = ""
+
+        if len(resume_segments['skills'].keys()):
+            for key, values in resume_segments['skills'].items():
+                skills += re.sub(key, '', ",".join(values), flags=re.IGNORECASE)
+            skills = skills.strip().strip(",").split(",")
+
+        if len(skills) == 0:
+            skills = resumeparse.extract_skills(full_text)
+        skills = list(dict.fromkeys(skills).keys())
+
         return {
             "email": email,
             "phone": phone,
